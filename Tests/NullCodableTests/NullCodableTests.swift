@@ -129,7 +129,7 @@ final class NullCodableTests: XCTestCase {
         XCTAssertEqual(test.b, 42)
     }
     
-    static var allTests = [
+    static let allTests = [
         ("test_noConformance", test_noConformance),
         ("test_encodable", test_encodable),
         ("test_decodable", test_decodable),
