@@ -1,0 +1,83 @@
+name: build
+
+on:
+  push:
+  pull_request:
+    branches: [ "main", "master" ]
+
+permissions:
+  contents: read
+  checks: write
+
+jobs:
+  build:
+    strategy:
+      fail-fast: false
+      matrix:
+        swift: ['swift-5.10', 'swift-6.1', 'swift-6.3']
+        include:
+          - swift: 'swift-5.10'
+            language_mode: '5'
+            xcode-path: '/Applications/Xcode_15.4.0.app'
+            macos: 'macos-14'
+          - swift: 'swift-6.1'
+            language_mode: '6'
+            xcode-path: '/Applications/Xcode_16.4.0.app'
+            macos: 'macos-15'
+          - swift: 'swift-6.3'
+            language_mode: '6'
+            xcode-path: '/Applications/Xcode_26.6.0.app'
+            macos: 'macos-26'
+    
+    env:
+      DEVELOPER_DIR: ${{ matrix.xcode-path }}
+
+    runs-on: ${{ matrix.macos }}
+
+    steps:
+    - name: checkout
+      uses: actions/checkout@v7
+
+    - name: verify Swift toolchain
+      shell: bash
+      run: |
+        version="$(swift --version)"
+        echo "$version"
+        case "${{ matrix.swift }}" in
+          swift-5.*)
+            [[ "$version" == *"Swift version 5."* ]]
+            ;;
+          swift-6.*)
+            [[ "$version" == *"Swift version 6."* ]]
+            ;;
+        esac
+
+    - name: build
+      run: swift build -v -Xswiftc -swift-version -Xswiftc ${{ matrix.language_mode }}
+
+    - name: reports directory
+      run: mkdir reports
+
+    - name: run unit tests
+      continue-on-error: true
+      run: swift test --parallel --xunit-output reports/NullCodable.xml -Xswiftc -swift-version -Xswiftc ${{ matrix.language_mode }}
+  
+    - name: report unit test results
+      uses: dorny/test-reporter@a43b3a5f7366b97d083190328d2c652e1a8b6aa2 # v3.0.0
+      if: always()
+      id: results-unit-tests
+      with:
+        name: 'results-unit-tests-${{ matrix.swift }}'
+        path: reports/NullCodable.xml
+        reporter: swift-xunit
+        fail-on-error: true
+  
+    - name: summary
+      if: always()
+      run: |
+        {
+          echo "# Test Reports (${{ matrix.swift }})"
+          echo ""
+          echo "Unit Tests: <${{ steps.results-unit-tests.outputs.url_html }}>"
+          echo "Integration Tests: <${{ steps.results-integration-tests.outputs.url_html }}>"
+        } >> $GITHUB_STEP_SUMMARY
